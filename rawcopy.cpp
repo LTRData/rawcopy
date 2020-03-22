@@ -10,24 +10,34 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-#ifdef DEBUG
-#pragma comment(linker, "/nodefaultlib:msvcrt.lib")
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
 #endif
 
 #include <stdlib.h>
 #include <winstrct.h>
 #include <winioctl.h>
+#include <ntdll.h>
 
 #include "rawcopy.rc.h"
+
+#pragma comment(lib, "ntdll.lib")
 
 #define STDBUFSIZ	512
 #define BIGBUFSIZ	(512 << 10)
 
+union VOLUME_BITMAP_BUFFERS
+{
+    STARTING_LCN_INPUT_BUFFER input;
+    VOLUME_BITMAP_BUFFER output;
+    char bytes[1 << 20];
+};
+
 char buffer[STDBUFSIZ];
-LARGE_INTEGER copylength = { 0 };
-LARGE_INTEGER readbytes = { 0 };
-LARGE_INTEGER writtenblocks = { 0 };
-LARGE_INTEGER skippedwritebytes = { 0 };
+LONGLONG copylength = { 0 };
+LONGLONG readbytes = { 0 };
+LONGLONG writtenblocks = { 0 };
+LONGLONG skippedwritebytes = { 0 };
 SIZE_T bufsiz = STDBUFSIZ;
 
 HANDLE hIn = INVALID_HANDLE_VALUE;
@@ -53,11 +63,11 @@ main(int argc, char **argv)
     LARGE_INTEGER sizWriteOffset = { 0 };	// -o:nnn parameter
 
     // Nice argument parse loop :)
-    while (argv[1] ? argv[1][0] ? (argv[1][0] | 0x02) == '/' : false : false)
+    while (argv[1] != NULL && (argv[1][0] | 0x02) == '/')
     {
         while ((++argv[1])[0])
             switch (argv[1][0])
-        {
+            {
             case 'm':
                 bBigBufferMode = true;
                 if (argv[1][1] == ':')
@@ -67,14 +77,14 @@ main(int argc, char **argv)
                     if (szSizeSuffix == argv[1] + 2)
                     {
                         fprintf(stderr,
-                            "Invalid buffer size: %s\r\n", szSizeSuffix);
+                            "Invalid buffer size: %s\n", szSizeSuffix);
                         return -1;
                     }
 
                     if (szSizeSuffix[0] ? szSizeSuffix[1] != 0 : false)
                     {
                         fprintf(stderr,
-                            "Invalid buffer size: %s\r\n", argv[1] + 2);
+                            "Invalid buffer size: %s\n", argv[1] + 2);
                         return -1;
                     }
 
@@ -97,7 +107,7 @@ main(int argc, char **argv)
                         break;
                     default:
                         fprintf(stderr,
-                            "Invalid size suffix: %c\r\n", szSizeSuffix[0]);
+                            "Invalid size suffix: %c\n", szSizeSuffix[0]);
                         return -1;
                     }
 
@@ -114,7 +124,7 @@ main(int argc, char **argv)
 
                 char SizeSuffix = NULL;
                 switch (sscanf(argv[1] + 2, "%I64i%c",
-                    &sizWriteOffset, &SizeSuffix))
+                    &sizWriteOffset.QuadPart, &SizeSuffix))
                 {
                 case 2:
                     switch (SizeSuffix)
@@ -144,7 +154,7 @@ main(int argc, char **argv)
                         break;
                     default:
                         fprintf(stderr,
-                            "Invalid forward skip suffix: %c\r\n",
+                            "Invalid forward skip suffix: %c\n",
                             SizeSuffix);
                         return -1;
                     }
@@ -158,7 +168,7 @@ main(int argc, char **argv)
                 }
 
                 if (bVerboseMode)
-                    printf("Write starts at %I64i bytes.\n", sizWriteOffset);
+                    printf("Write starts at %I64i bytes.\n", sizWriteOffset.QuadPart);
             }
 
             argv[1] += strlen(argv[1]) - 1;
@@ -210,7 +220,7 @@ main(int argc, char **argv)
                 break;
             default:
                 bDisplayHelp = true;
-        }
+            }
 
         --argc;
         ++argv;
@@ -221,68 +231,68 @@ main(int argc, char **argv)
 
     if (bDisplayHelp)
     {
-        fputs("File and device read/write utility.\r\n"
+        fputs("File and device read/write utility.\n"
             "\n"
             "Version " RAWCOPY_VERSION ". "
-            "Copyright (C) Olof Lagerkvist 1997-2014.\r\n"
-            "Differential operation based on modification by LZ.\r\n"
-            "This program is open source freeware.\r\n"
-            "http://www.ltr-data.se      olof@ltr-data.se\r\n"
+            "Copyright (C) Olof Lagerkvist 1997-2018.\n"
+            "Differential operation based on modification by LZ.\n"
+            "This program is open source freeware.\n"
+            "http://www.ltr-data.se      olof@ltr-data.se\n"
             "\n"
-            "Usage:\r\n"
-            "rawcopy [-lvirwxsd] [-f[:count]] [-m[:bufsize]] [-o:writeoffset]\r\n"
-            "       [[[[[skipforward] copylength] infile] outfile]\r\n"
+            "Usage:\n"
+            "rawcopy [-lvirwxsdD] [-f[:count]] [-m[:bufsize]] [-o:writeoffset]\n"
+            "       [[[[[skipforward] copylength] infile] outfile]\n"
             "\n"
-            "Default infile/outfile if none or blank given is standard input/output device.\r\n"
-            "-l     Access devices without locking access to them. Use this switch when you\r\n"
-            "       are reading/writing physical drives and other processes are using the\r\n"
-            "       drives.\r\n"
-            "       Note! This may destroy your data!\r\n"
+            "Default infile/outfile if none or blank given is standard input/output device.\n"
+            "-l     Access devices without locking access to them. Use this switch when you\n"
+            "       are reading/writing physical drives and other processes are using the\n"
+            "       drives.\n"
+            "       Note! This may destroy your data!\n"
             "\n"
-            "-v     Verbose mode. Writes to stderr what is being done.\r\n"
+            "-v     Verbose mode. Writes to stderr what is being done.\n"
             "\n"
-            "-f     Number of retries on failed I/O operations.\r\n"
+            "-f     Number of retries on failed I/O operations.\n"
             "\n"
-            "-m     Try to buffer more of input file into memory before writing to output\r\n"
-            "       file.\r\n"
+            "-m     Try to buffer more of input file into memory before writing to output\n"
+            "       file.\n"
             "\n"
-            "       Buffer size may be suffixed with K,M or G. If -m is given without a\r\n"
-            "       buffer size, 512 KB is assumed. If -m is not given a buffer size of 512\r\n"
-            "       bytes is used and read/write failures can be ignored.\r\n"
+            "       Buffer size may be suffixed with K,M or G. If -m is given without a\n"
+            "       buffer size, 512 KB is assumed. If -m is not given a buffer size of 512\n"
+            "       bytes is used and read/write failures can be ignored.\n"
             "\n"
-            "-i     Ignores and skip over read/write failures without displaying any dialog\r\n"
-            "       boxes.\r\n"
+            "-i     Ignores and skip over read/write failures without displaying any dialog\n"
+            "       boxes.\n"
             "\n"
-            "-r     Read input without intermediate buffering.\r\n"
+            "-r     Read input without intermediate buffering.\n"
             "\n"
-            "-w     Write output without intermediate buffering.\r\n"
+            "-w     Write output without intermediate buffering.\n"
             "\n"
-            "-x     Write through to output without going via system cache.\r\n"
+            "-x     Write through to output without going via system cache.\n"
             "\n"
-            "-s     Creates output file as sparse file on NTFS volumes and skips explicitly\r\n"
-            "       writing all-zero blocks.\r\n"
+            "-s     Creates output file as sparse file on NTFS volumes and skips explicitly\n"
+            "       writing all-zero blocks.\n"
             "\n"
-            "-D     Differential operation. Skips rewriting blocks in output file that are\r\n"
-            "       already equal to corresponding blocks in input file.\r\n"
+            "-D     Differential operation. Skips rewriting blocks in output file that are\n"
+            "       already equal to corresponding blocks in input file.\n"
             "\n"
             "-d     Use extended DASD I/O when reading/writing disks. You also need to\n"
-            "       select a compatible buffer size with the -m switch for successful\r\n"
-            "       operation.\r\n"
+            "       select a compatible buffer size with the -m switch for successful\n"
+            "       operation.\n"
             "\n"
-            "-a     Adjusts size out output file to disk volume size of input. This switch\r\n"
-            "       is only valid if input is a disk volume.\r\n"
+            "-a     Adjusts size out output file to disk volume size of input. This switch\n"
+            "       is only valid if input is a disk volume.\n"
             "\n"
-            "Examples for Windows NT:\r\n"
-            "rawcopy -m diskimage.img \\\\.\\A:\r\n"
-            "  Writes a diskette image file called \"diskimage.img\" to a physical diskette\r\n"
-            "  in drive A:. (File extension .img is just an example, sometimes such images\r\n"
-            "  are called for example .vfd.)\r\n"
-            "rawcopy \\\\.\\PIPE\\MYPIPE \"\"\r\n"
-            "  Reads data from named pipe \"MYPIPE\" on the local machine and write on\r\n"
-            "  standard output.\r\n"
-            "rawcopy 512 \\\\.\\PhysicalDrive0 parttable\r\n"
-            "  Copies 512 bytes (partition table) from first physical harddrive to file\r\n"
-            "  called \"parttable\".\r\n", stderr);
+            "Examples for Windows NT:\n"
+            "rawcopy -m diskimage.img \\\\.\\A:\n"
+            "  Writes a diskette image file called \"diskimage.img\" to a physical diskette\n"
+            "  in drive A:. (File extension .img is just an example, sometimes such images\n"
+            "  are called for example .vfd.)\n"
+            "rawcopy \\\\.\\PIPE\\MYPIPE \"\"\n"
+            "  Reads data from named pipe \"MYPIPE\" on the local machine and write on\n"
+            "  standard output.\n"
+            "rawcopy 512 \\\\.\\PhysicalDrive0 parttable\n"
+            "  Copies 512 bytes (partition table) from first physical harddrive to file\n"
+            "  called \"parttable\".\n", stderr);
 
         return -1;
     }
@@ -292,7 +302,7 @@ main(int argc, char **argv)
     {
         char SizeSuffix;
         switch (sscanf(argv[1], "%I64i%c",
-            &skipforward, &SizeSuffix))
+            &skipforward.QuadPart, &SizeSuffix))
         {
         case 2:
             switch (SizeSuffix)
@@ -322,7 +332,7 @@ main(int argc, char **argv)
                 break;
             default:
                 fprintf(stderr,
-                    "Invalid forward skip suffix: %c\r\n", SizeSuffix);
+                    "Invalid forward skip suffix: %c\n", SizeSuffix);
                 return -1;
             }
 
@@ -335,7 +345,7 @@ main(int argc, char **argv)
         }
 
         if (bVerboseMode)
-            printf("Skipping %I64i bytes.\n", skipforward);
+            printf("Skipping %I64i bytes.\n", skipforward.QuadPart);
 
         argv++;
         argc--;
@@ -351,31 +361,32 @@ main(int argc, char **argv)
             switch (SizeSuffix)
             {
             case 'G':
-                copylength.QuadPart <<= 30;
+                copylength <<= 30;
                 break;
             case 'M':
-                copylength.QuadPart <<= 20;
+                copylength <<= 20;
                 break;
             case 'K':
-                copylength.QuadPart <<= 10;
+                copylength <<= 10;
                 break;
             case 'g':
-                copylength.QuadPart *= 1000000000;
+                copylength *= 1000000000;
                 break;
             case 'm':
-                copylength.QuadPart *= 1000000;
+                copylength *= 1000000;
                 break;
             case 'k':
-                copylength.QuadPart *= 1000;
+                copylength *= 1000;
                 break;
             case 'B':
-                copylength.QuadPart *= 512;
+                copylength *= 512;
                 break;
             case 0:
                 break;
             default:
-                fprintf(stderr, "Invalid copylength suffix: %c\r\n",
+                fprintf(stderr, "Invalid copylength suffix: %c\n",
                     SizeSuffix);
+
                 return -1;
             }
 
@@ -395,40 +406,42 @@ main(int argc, char **argv)
     }
 
     if ((argc > 2) && (argv[1] != NULL) && (argv[1][0] != 0))
+    {
         hIn = CreateFile(argv[1],
-        GENERIC_READ,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        NULL,
-        OPEN_EXISTING,
-        FILE_FLAG_SEQUENTIAL_SCAN |
-        (bNonBufferedIn ? FILE_FLAG_NO_BUFFERING : 0),
-        NULL);
+            GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            NULL,
+            OPEN_EXISTING,
+            FILE_FLAG_SEQUENTIAL_SCAN |
+            (bNonBufferedIn ? FILE_FLAG_NO_BUFFERING : 0),
+            NULL);
+    }
     else
+    {
         hIn = GetStdHandle(STD_INPUT_HANDLE);
+    }
 
     if (hIn == INVALID_HANDLE_VALUE)
     {
         win_perror(argc > 1 ? argv[1] : "stdin");
         if (bVerboseMode)
-            fputs("Error opening input file.\r\n", stderr);
+            fputs("Error opening input file.\n", stderr);
         return -1;
     }
 
-    if (skipforward.QuadPart)
+    if (skipforward.QuadPart &&
+        (SetFilePointer(hIn, skipforward.LowPart, &skipforward.HighPart,
+            FILE_CURRENT) == INVALID_SET_FILE_POINTER) &&
+            (GetLastError() != NO_ERROR))
     {
-        if (SetFilePointer(hIn, skipforward.LowPart, &skipforward.HighPart,
-            FILE_CURRENT) == INVALID_SET_FILE_POINTER)
-            if (GetLastError() != NO_ERROR)
-            {
-                win_perror("Fatal, cannot set input file pointer");
-                return -1;
-            }
+        win_perror("Fatal, cannot set input file pointer");
+        return -1;
     }
 
     if (bExtendedDASDIO)
     {
         // Turn on FSCTL_ALLOW_EXTENDED_DASD_IO so that we can make sure that we
-        // read the entire drive
+        // read the entire drive bypassing filesystem limits
         DWORD dwReadSize;
         DeviceIoControl(hIn,
             FSCTL_ALLOW_EXTENDED_DASD_IO,
@@ -464,7 +477,9 @@ main(int argc, char **argv)
             sizeof(partition_info),
             &dwBytesReturned,
             NULL))
+        {
             disk_size.QuadPart = partition_info.PartitionLength.QuadPart;
+        }
         else if (DeviceIoControl(hIn,
             IOCTL_DISK_GET_DRIVE_GEOMETRY,
             NULL,
@@ -473,11 +488,13 @@ main(int argc, char **argv)
             sizeof(disk_geometry),
             &dwBytesReturned,
             NULL))
+        {
             disk_size.QuadPart =
-            disk_geometry.Cylinders.QuadPart *
-            disk_geometry.TracksPerCylinder *
-            disk_geometry.SectorsPerTrack *
-            disk_geometry.BytesPerSector;
+                disk_geometry.Cylinders.QuadPart *
+                disk_geometry.TracksPerCylinder *
+                disk_geometry.SectorsPerTrack *
+                disk_geometry.BytesPerSector;
+        }
         else
         {
             win_perror("Cannot get input disk volume size");
@@ -492,7 +509,9 @@ main(int argc, char **argv)
     if (bBigBufferMode)
     {
         if ((bufptr = (char *)LocalAlloc(LPTR, sizBigBufferSize)) != NULL)
+        {
             bufsiz = LocalSize(bufptr);
+        }
         else
         {
             bufptr = buffer;
@@ -501,16 +520,20 @@ main(int argc, char **argv)
         }
 
         if (bVerboseMode)
-            fprintf(stderr, "Buffering %u bytes.\n", bufsiz);
+        {
+            fprintf(stderr, "Buffering %u bytes.\n", (DWORD)bufsiz);
+        }
     }
     // -m is not used
     else
     {
         bufptr = buffer;
         if (bVerboseMode)
+        {
             fprintf(stderr,
-            "Sequential scan mode used, "
-            "max read/write buffer is %u bytes.\n", bufsiz);
+                "Sequential scan mode used, "
+                "max read/write buffer is %u bytes.\n", (DWORD)bufsiz);
+        }
     }
 
     if (bDifferential)
@@ -542,9 +565,10 @@ main(int argc, char **argv)
             (bWriteThrough ? FILE_FLAG_WRITE_THROUGH : 0),
             hIn);
 
-        if (hOut == INVALID_HANDLE_VALUE)
-            if (GetLastError() == ERROR_INVALID_PARAMETER)
-                hOut = CreateFile(argv[1],
+        if (hOut == INVALID_HANDLE_VALUE &&
+            GetLastError() == ERROR_INVALID_PARAMETER)
+        {
+            hOut = CreateFile(argv[1],
                 (bDifferential ? GENERIC_READ : 0) | GENERIC_WRITE,
                 FILE_SHARE_READ | FILE_SHARE_WRITE,
                 NULL,
@@ -552,15 +576,20 @@ main(int argc, char **argv)
                 (bNonBufferedOut ? FILE_FLAG_NO_BUFFERING : 0) |
                 (bWriteThrough ? FILE_FLAG_WRITE_THROUGH : 0),
                 NULL);
+        }
     }
     else
+    {
         hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    }
 
     if (hOut == INVALID_HANDLE_VALUE)
     {
         win_perror(argc > 1 ? argv[1] : "stdout");
+
         if (bVerboseMode)
-            fputs("Error opening output file.\r\n", stderr);
+            fputs("Error opening output file.\n", stderr);
+
         return -1;
     }
 
@@ -586,20 +615,23 @@ main(int argc, char **argv)
         DWORD z;
         FlushFileBuffers(hIn);
         if (DeviceIoControl(hIn, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0, &z, NULL))
+        {
             if (DeviceIoControl(hIn, FSCTL_DISMOUNT_VOLUME, NULL, 0, NULL, 0, &z,
                 NULL))
             {
                 if (bVerboseMode)
-                    fputs("Source device locked and dismounted.\r\n", stderr);
+                    fputs("Source device locked and dismounted.\n", stderr);
             }
             else
             {
                 if (bVerboseMode)
-                    fputs("Source device locked.\r\n", stderr);
+                    fputs("Source device locked.\n", stderr);
             }
+        }
         else
-            switch (GetLastError())
         {
+            switch (GetLastError())
+            {
             case ERROR_NOT_SUPPORTED:
             case ERROR_INVALID_FUNCTION:
             case ERROR_INVALID_HANDLE:
@@ -621,6 +653,7 @@ main(int argc, char **argv)
                 }
                 else
                     win_perror("Warning! Source device not locked");
+            }
         }
     }
 
@@ -633,12 +666,12 @@ main(int argc, char **argv)
         LARGE_INTEGER current_out_pointer = { 0 };
         current_out_pointer.LowPart =
             SetFilePointer(hOut, 0, &current_out_pointer.HighPart, FILE_CURRENT);
-        if (current_out_pointer.LowPart == INVALID_SET_FILE_POINTER)
-            if (GetLastError() != NO_ERROR)
-            {
-                win_perror("Fatal, cannot get output file pointer");
-                return -1;
-            }
+        if (current_out_pointer.LowPart == INVALID_SET_FILE_POINTER &&
+            GetLastError() != NO_ERROR)
+        {
+            win_perror("Fatal, cannot get output file pointer");
+            return -1;
+        }
 
         existing_out_file_size.QuadPart -= current_out_pointer.QuadPart;
     }
@@ -648,20 +681,23 @@ main(int argc, char **argv)
         FlushFileBuffers(hOut);
 
         if (DeviceIoControl(hOut, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0, &z, NULL))
+        {
             if (DeviceIoControl(hOut, FSCTL_DISMOUNT_VOLUME, NULL, 0, NULL, 0, &z,
                 NULL))
             {
                 if (bVerboseMode)
-                    fputs("Target device locked and dismounted.\r\n", stderr);
+                    fputs("Target device locked and dismounted.\n", stderr);
             }
             else
             {
                 if (bVerboseMode)
-                    fputs("Target device locked.\r\n", stderr);
+                    fputs("Target device locked.\n", stderr);
             }
+        }
         else
-            switch (GetLastError())
         {
+            switch (GetLastError())
+            {
             case ERROR_NOT_SUPPORTED:
             case ERROR_INVALID_FUNCTION:
             case ERROR_INVALID_HANDLE:
@@ -683,6 +719,7 @@ main(int argc, char **argv)
                 }
                 else
                     win_perror("Warning! Target device not locked");
+            }
         }
     }
 
@@ -700,18 +737,18 @@ main(int argc, char **argv)
 
     if (sizWriteOffset.QuadPart != 0)
     {
-        sizWriteOffset.LowPart =
-            SetFilePointer(hOut,
+        sizWriteOffset.LowPart = SetFilePointer(
+            hOut,
             sizWriteOffset.LowPart,
             &sizWriteOffset.HighPart,
             FILE_CURRENT);
 
-        if (sizWriteOffset.LowPart == INVALID_SET_FILE_POINTER)
-            if (GetLastError() != NO_ERROR)
-            {
-                win_perror("Error seeking on output device");
-                return 2;
-            }
+        if (sizWriteOffset.LowPart == INVALID_SET_FILE_POINTER &&
+            GetLastError() != NO_ERROR)
+        {
+            win_perror("Error seeking on output device");
+            return 2;
+        }
     }
 
     for (;;)
@@ -725,24 +762,45 @@ main(int argc, char **argv)
         DWORD dwBlockSize = (DWORD)bufsiz;
         DWORD retries = 0;
 
-        if (copylength.QuadPart != 0)
-            if (readbytes.QuadPart >= copylength.QuadPart)
-                break;
-            else if ((dwBlockSize + readbytes.QuadPart) >= copylength.QuadPart)
+        if (copylength != 0)
+        {
+            if (readbytes >= copylength)
             {
-                dwBlockSize = (DWORD)(copylength.QuadPart - readbytes.QuadPart);
-                if (bVerboseMode)
-                    fprintf(stderr, "Reading last %u bytes...\r", dwBlockSize);
+                break;
             }
+            else if ((dwBlockSize + readbytes) >= copylength)
+            {
+                dwBlockSize = (DWORD)(copylength - readbytes);
+                if (bVerboseMode)
+                {
+                    fprintf(stderr, "Reading last %u bytes...\n", dwBlockSize);
+                }
+            }
+        }
 
-        DWORD dwReadSize;
+        DWORD dwReadSize = 0;
+
         while (!ReadFile(hIn, bufptr, dwBlockSize, &dwReadSize, NULL))
         {
-            // End of pipe?
             DWORD dwErrNo = GetLastError();
-            if ((dwErrNo == ERROR_BROKEN_PIPE) |
-                (dwErrNo == ERROR_INVALID_PARAMETER))
+
+            // End of physical disk? Might need to read fewer bytes towards end of device.
+            if (dwErrNo == ERROR_SECTOR_NOT_FOUND &&
+                dwReadSize == 0 &&
+                dwBlockSize > 512)
+            {
+                dwBlockSize = 512;
+                continue;
+            }
+
+            // End of pipe, disk etc?
+            if (dwReadSize == 0 &&
+                (dwErrNo == ERROR_BROKEN_PIPE ||
+                    dwErrNo == ERROR_INVALID_PARAMETER ||
+                    dwErrNo == ERROR_SECTOR_NOT_FOUND))
+            {
                 break;
+            }
 
             WErrMsg errmsg;
 
@@ -750,8 +808,11 @@ main(int argc, char **argv)
             {
                 fprintf(stderr, "Rawcopy read failure: %s\nRetrying...\n",
                     (char*)errmsg);
+
                 retries++;
+
                 Sleep(500);
+
                 continue;
             }
 
@@ -759,8 +820,8 @@ main(int argc, char **argv)
 
             switch (bIgnoreErrors ? IDIGNORE :
                 MessageBox(NULL, errmsg, "Rawcopy read failure",
-                MB_ABORTRETRYIGNORE | MB_ICONEXCLAMATION |
-                MB_DEFBUTTON2 | MB_TASKMODAL))
+                    MB_ABORTRETRYIGNORE | MB_ICONEXCLAMATION |
+                    MB_DEFBUTTON2 | MB_TASKMODAL))
             {
             case IDABORT:
                 return -1;
@@ -770,8 +831,8 @@ main(int argc, char **argv)
                 if (bVerboseMode)
                 {
                     CharToOem(errmsg, errmsg);
-                    fprintf(stderr, "Ignoring read error at block %I64u: %s\r\n",
-                        writtenblocks, errmsg);
+                    fprintf(stderr, "Ignoring read error at block %I64u: %s\n",
+                        writtenblocks, (LPCSTR)errmsg);
                 }
 
                 dwReadSize = dwBlockSize;
@@ -779,12 +840,12 @@ main(int argc, char **argv)
                 LARGE_INTEGER newpos = { 0 };
                 newpos.QuadPart = bufsiz;
                 if (SetFilePointer(hIn, newpos.LowPart, &newpos.HighPart,
-                    FILE_CURRENT) == INVALID_SET_FILE_POINTER)
-                    if (GetLastError() != NO_ERROR)
-                    {
-                        win_perror("Fatal, cannot set input file pointer");
-                        return -1;
-                    }
+                    FILE_CURRENT) == INVALID_SET_FILE_POINTER &&
+                    GetLastError() != NO_ERROR)
+                {
+                    win_perror("Fatal, cannot set input file pointer");
+                    return -1;
+                }
             }
             break;
         }
@@ -793,7 +854,7 @@ main(int argc, char **argv)
         if (dwReadSize == 0)
         {
             if (bVerboseMode)
-                fputs("\r\nEnd of input.\r\n", stderr);
+                fputs("\r\nEnd of input.\n", stderr);
 
             break;
         }
@@ -802,56 +863,58 @@ main(int argc, char **argv)
         // file if "create sparse" flag is set and we are writing outside
         // output file data
         bool bSkipWriteBlock = false;
-        if (bCreateSparse)
-            if (readbytes.QuadPart >= existing_out_file_size.QuadPart)
-            {
-                bSkipWriteBlock = true;
-                for (PULONGLONG bufptr2 = (PULONGLONG)bufptr;
-                    bufptr2 < (PULONGLONG)(bufptr + dwReadSize);
-                    bufptr2++)
-                    if (*bufptr2 != 0)
-                    {
-                        bSkipWriteBlock = false;
-                        break;
-                    }
-            }
 
-        readbytes.QuadPart += dwReadSize;
+        if (bCreateSparse && readbytes >= existing_out_file_size.QuadPart)
+        {
+            bSkipWriteBlock = true;
+
+            for (PULONGLONG bufptr2 = (PULONGLONG)bufptr;
+                bufptr2 < (PULONGLONG)(bufptr + dwReadSize);
+                bufptr2++)
+            {
+                if (*bufptr2 != 0)
+                {
+                    bSkipWriteBlock = false;
+                    break;
+                }
+            }
+        }
+
+        readbytes += dwReadSize;
 
         // Check existing block in output file and skip explicitly writing it
         // again if "differential" flag is set and output block is already equal
         // to corresponding block in input file.
         if (bDifferential)
-            if (readbytes.QuadPart <= existing_out_file_size.QuadPart)
+        {
+            DWORD dwDiffReadSize;
+
+            if (!ReadFile(hOut, diffbufptr, dwReadSize, &dwDiffReadSize, NULL))
             {
-                DWORD dwDiffReadSize;
-                if (!ReadFile(hOut, diffbufptr, dwReadSize, &dwDiffReadSize, NULL))
-                {
-                    win_perror("Error reading output file");
-                    return -1;
-                }
+                win_perror("Error reading output file");
+                return -1;
+            }
 
-                if (dwDiffReadSize != dwReadSize)
-                {
-                    fputs("Error reading output file.\r\n", stderr);
-                    return -1;
-                }
-
+            if (dwDiffReadSize == dwReadSize)
+            {
                 LARGE_INTEGER rewind_pos;
                 rewind_pos.QuadPart = -(LONGLONG)dwDiffReadSize;
                 if (SetFilePointer(hOut,
                     rewind_pos.LowPart,
                     &rewind_pos.HighPart,
-                    FILE_CURRENT) == INVALID_SET_FILE_POINTER)
-                    if (GetLastError() != NO_ERROR)
-                    {
-                        win_perror("Fatal, cannot set output file pointer");
-                        return -1;
-                    }
+                    FILE_CURRENT) == INVALID_SET_FILE_POINTER &&
+                    GetLastError() != NO_ERROR)
+                {
+                    win_perror("Fatal, cannot set output file pointer");
+                    return -1;
+                }
 
                 if (memcmp(bufptr, diffbufptr, dwReadSize) == 0)
+                {
                     bSkipWriteBlock = true;
+                }
             }
+        }
 
         DWORD dwWriteSize = 0;
         if (bSkipWriteBlock)
@@ -861,26 +924,28 @@ main(int argc, char **argv)
 
             LONG lZero = 0;
             if (SetFilePointer(hOut, dwReadSize, &lZero, FILE_CURRENT) ==
-                INVALID_SET_FILE_POINTER)
-                if (GetLastError() != NO_ERROR)
-                {
-                    win_perror("Fatal, cannot set output file pointer");
-                    return -1;
-                }
+                INVALID_SET_FILE_POINTER &&
+                GetLastError() != NO_ERROR)
+            {
+                win_perror("Fatal, cannot set output file pointer");
+                return -1;
+            }
 
-            if (readbytes.QuadPart > existing_out_file_size.QuadPart)
+            if (readbytes > existing_out_file_size.QuadPart)
+            {
                 SetEndOfFile(hOut);
+            }
 
             dwWriteSize = dwReadSize;
 
-            skippedwritebytes.QuadPart += dwWriteSize;
+            skippedwritebytes += dwWriteSize;
         }
         else
         {
             if (bVerboseMode)
                 fprintf(stderr, "Writing block %I64u\r", writtenblocks);
 
-            DWORD retries = 0;
+            DWORD write_retries = 0;
 
             // Write next block
             while (!WriteFile(hOut, bufptr, dwReadSize, &dwWriteSize, NULL))
@@ -892,21 +957,22 @@ main(int argc, char **argv)
 
                 WErrMsg errmsg;
 
-                if (retries < retrycount)
+                if (write_retries < retrycount)
                 {
                     fprintf(stderr, "Rawcopy write failure: %s\nRetrying...\n",
                         (char*)errmsg);
-                    retries++;
+
+                    write_retries++;
                     Sleep(500);
                     continue;
                 }
 
-                retries = 0;
+                write_retries = 0;
 
                 switch (bIgnoreErrors ? IDIGNORE :
                     MessageBox(NULL, errmsg, "Rawcopy write failure",
-                    MB_ABORTRETRYIGNORE | MB_ICONEXCLAMATION |
-                    MB_DEFBUTTON2 | MB_TASKMODAL))
+                        MB_ABORTRETRYIGNORE | MB_ICONEXCLAMATION |
+                        MB_DEFBUTTON2 | MB_TASKMODAL))
                 {
                 case IDABORT:
                     return -1;
@@ -917,18 +983,18 @@ main(int argc, char **argv)
                     {
                         CharToOem(errmsg, errmsg);
                         fprintf(stderr,
-                            "Ignoring write error at block %I64u: %s\r\n",
-                            writtenblocks, errmsg);
+                            "Ignoring write error at block %I64u: %s\n",
+                            writtenblocks, (LPCSTR)errmsg);
                     }
 
                     LONG lZero = 0;
                     if (SetFilePointer(hOut, dwReadSize - dwWriteSize, &lZero,
-                        FILE_CURRENT) == INVALID_SET_FILE_POINTER)
-                        if (GetLastError() != NO_ERROR)
-                        {
-                            win_perror("Fatal, cannot set output file pointer");
-                            return -1;
-                        }
+                        FILE_CURRENT) == INVALID_SET_FILE_POINTER &&
+                        GetLastError() != NO_ERROR)
+                    {
+                        win_perror("Fatal, cannot set output file pointer");
+                        return -1;
+                    }
                 }
                 break;
             }
@@ -939,28 +1005,34 @@ main(int argc, char **argv)
         }
 
         if (dwWriteSize < dwReadSize)
+        {
             fprintf(stderr, "Warning: %u bytes lost.\n",
-            dwReadSize - dwWriteSize);
+                dwReadSize - dwWriteSize);
+        }
 
         // Check for EOF condition
         if (dwWriteSize == 0)
         {
             if (bVerboseMode)
-                fputs("\r\nEnd of output.\r\n", stderr);
+                fputs("\r\nEnd of output.\n", stderr);
 
             break;
         }
 
-        ++writtenblocks.QuadPart;
-        if (copylength.QuadPart != 0)
-            if (writtenblocks.QuadPart >= copylength.QuadPart)
-                break;
+        ++writtenblocks;
+        if (copylength != 0 &&
+            writtenblocks >= copylength)
+        {
+            break;
+        }
     }
 
     if (bAdjustSize)
     {
         if (disk_size.QuadPart > skipforward.QuadPart)
+        {
             disk_size.QuadPart -= skipforward.QuadPart;
+        }
 
         ULARGE_INTEGER existing_size = { 0 };
         DWORD ptr;
@@ -969,21 +1041,22 @@ main(int argc, char **argv)
         // the original disk volume and possibly adjusts image file size if it
         // does not exactly match the size of the original disk/partition.
         existing_size.LowPart = GetFileSize(hOut, &existing_size.HighPart);
-        if (existing_size.LowPart == INVALID_FILE_SIZE)
-            if (GetLastError() != NO_ERROR)
-            {
-                win_perror("Error getting output file size");
-                return 1;
-            }
+        if (existing_size.LowPart == INVALID_FILE_SIZE &&
+            GetLastError() != NO_ERROR)
+        {
+            win_perror("Error getting output file size");
+            return 1;
+        }
 
         if (existing_size.QuadPart < (ULONGLONG)disk_size.QuadPart)
         {
             fprintf(stderr,
                 "Warning: Output file size is smaller "
-                "than input disk volume size.\r\n"
-                "Input disk volume size: %I64i bytes.\r\n"
-                "Output image file size: %I64i bytes.\r\n",
-                disk_size, existing_size);
+                "than input disk volume size.\n"
+                "Input disk volume size: %I64i bytes.\n"
+                "Output image file size: %I64i bytes.\n",
+                disk_size.QuadPart, existing_size.QuadPart);
+
             return 1;
         }
 
@@ -991,12 +1064,13 @@ main(int argc, char **argv)
             disk_size.LowPart,
             (LPLONG)&disk_size.HighPart,
             FILE_BEGIN);
-        if (ptr == INVALID_SET_FILE_POINTER)
-            if (GetLastError() != NO_ERROR)
-            {
-                win_perror("Error setting output file size");
-                return 1;
-            }
+
+        if (ptr == INVALID_SET_FILE_POINTER &&
+            GetLastError() != NO_ERROR)
+        {
+            win_perror("Error setting output file size");
+            return 1;
+        }
 
         if (!SetEndOfFile(hOut))
         {
@@ -1007,15 +1081,17 @@ main(int argc, char **argv)
 
     if (bDifferential)
     {
-        LARGE_INTEGER updated_bytes;
-        updated_bytes.QuadPart = readbytes.QuadPart - skippedwritebytes.QuadPart;
-        fprintf(stderr, "\r\n%.4g %s of %.4g %s updated (%.3g %%).\r\n",
-            TO_h(updated_bytes.QuadPart), TO_p(updated_bytes.QuadPart),
-            TO_h(readbytes.QuadPart), TO_p(readbytes.QuadPart),
-            (double)(100 * (double)updated_bytes.QuadPart /
-            readbytes.QuadPart));
+        LONGLONG updated_bytes;
+        updated_bytes = readbytes - skippedwritebytes;
+        fprintf(stderr, "\n%.4g %s of %.4g %s updated (%.3g %%).\n",
+            TO_h(updated_bytes), TO_p(updated_bytes),
+            TO_h(readbytes), TO_p(readbytes),
+            (double)(100 * (double)updated_bytes /
+                readbytes));
     }
     else if (bVerboseMode)
-        fprintf(stderr, "\r\n%.4g %s copied.\r\n",
-        TO_h(readbytes.QuadPart), TO_p(readbytes.QuadPart));
+    {
+        fprintf(stderr, "\n%.4g %s copied.\n",
+            TO_h(readbytes), TO_p(readbytes));
+    }
 }
