@@ -90,6 +90,12 @@ main(int argc, char **argv)
 
                     switch (szSizeSuffix[0])
                     {
+                    case 'E':
+                        sizBigBufferSize <<= 10;
+                    case 'P':
+                        sizBigBufferSize <<= 10;
+                    case 'T':
+                        sizBigBufferSize <<= 10;
                     case 'G':
                         sizBigBufferSize <<= 10;
                     case 'M':
@@ -97,6 +103,12 @@ main(int argc, char **argv)
                     case 'K':
                         sizBigBufferSize <<= 10;
                         break;
+                    case 'e':
+                        sizBigBufferSize *= 1000;
+                    case 'p':
+                        sizBigBufferSize *= 1000;
+                    case 't':
+                        sizBigBufferSize *= 1000;
                     case 'g':
                         sizBigBufferSize *= 1000;
                     case 'm':
@@ -129,6 +141,15 @@ main(int argc, char **argv)
                 case 2:
                     switch (SizeSuffix)
                     {
+                    case 'E':
+                        sizWriteOffset.QuadPart <<= 60;
+                        break;
+                    case 'P':
+                        sizWriteOffset.QuadPart <<= 50;
+                        break;
+                    case 'T':
+                        sizWriteOffset.QuadPart <<= 40;
+                        break;
                     case 'G':
                         sizWriteOffset.QuadPart <<= 30;
                         break;
@@ -137,6 +158,15 @@ main(int argc, char **argv)
                         break;
                     case 'K':
                         sizWriteOffset.QuadPart <<= 10;
+                        break;
+                    case 'e':
+                        sizWriteOffset.QuadPart *= 1000000000000000000;
+                        break;
+                    case 'p':
+                        sizWriteOffset.QuadPart *= 1000000000000000;
+                        break;
+                    case 't':
+                        sizWriteOffset.QuadPart *= 1000000000000;
                         break;
                     case 'g':
                         sizWriteOffset.QuadPart *= 1000000000;
@@ -307,6 +337,15 @@ main(int argc, char **argv)
         case 2:
             switch (SizeSuffix)
             {
+            case 'E':
+                skipforward.QuadPart <<= 60;
+                break;
+            case 'P':
+                skipforward.QuadPart <<= 50;
+                break;
+            case 'T':
+                skipforward.QuadPart <<= 40;
+                break;
             case 'G':
                 skipforward.QuadPart <<= 30;
                 break;
@@ -315,6 +354,15 @@ main(int argc, char **argv)
                 break;
             case 'K':
                 skipforward.QuadPart <<= 10;
+                break;
+            case 'e':
+                skipforward.QuadPart *= 1000000000000000000;
+                break;
+            case 'p':
+                skipforward.QuadPart *= 1000000000000000;
+                break;
+            case 't':
+                skipforward.QuadPart *= 1000000000000;
                 break;
             case 'g':
                 skipforward.QuadPart *= 1000000000;
@@ -360,6 +408,15 @@ main(int argc, char **argv)
         case 2:
             switch (SizeSuffix)
             {
+            case 'E':
+                copylength <<= 60;
+                break;
+            case 'P':
+                copylength <<= 50;
+                break;
+            case 'T':
+                copylength <<= 40;
+                break;
             case 'G':
                 copylength <<= 30;
                 break;
@@ -368,6 +425,15 @@ main(int argc, char **argv)
                 break;
             case 'K':
                 copylength <<= 10;
+                break;
+            case 'e':
+                copylength *= 1000000000000000000;
+                break;
+            case 'p':
+                copylength *= 1000000000000000;
+                break;
+            case 't':
+                copylength *= 1000000000000;
                 break;
             case 'g':
                 copylength *= 1000000000;
