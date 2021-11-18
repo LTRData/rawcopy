@@ -1,8 +1,8 @@
-#ifdef UNICODE
-#undef UNICODE
+#ifndef UNICODE
+#define UNICODE
 #endif
-#ifdef _UNICODE
-#undef _UNICODE
+#ifndef _UNICODE
+#define _UNICODE
 #endif
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0500
@@ -17,10 +17,12 @@
 #include <stdlib.h>
 #include <winstrct.h>
 #include <winioctl.h>
+#include <shellapi.h>
 #include <ntdll.h>
 
 #include "rawcopy.rc.h"
 
+#pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "ntdll.lib")
 
 #define STDBUFSIZ	512
@@ -44,7 +46,7 @@ HANDLE hIn = INVALID_HANDLE_VALUE;
 HANDLE hOut = INVALID_HANDLE_VALUE;
 
 int
-main(int argc, char **argv)
+wmain(int argc, WCHAR *argv[])
 {
     bool bBigBufferMode = false;	// -m switch
     bool bDeviceLockRequired = true;	// not -l switch
@@ -66,125 +68,121 @@ main(int argc, char **argv)
     while (argv[1] != NULL && (argv[1][0] | 0x02) == '/')
     {
         while ((++argv[1])[0])
+        {
             switch (argv[1][0])
             {
-            case 'm':
+            case L'm':
                 bBigBufferMode = true;
                 if (argv[1][1] == ':')
                 {
-                    char *szSizeSuffix = NULL;
-                    sizBigBufferSize = strtoul(argv[1] + 2, &szSizeSuffix, 0);
-                    if (szSizeSuffix == argv[1] + 2)
-                    {
-                        fprintf(stderr,
-                            "Invalid buffer size: %s\n", szSizeSuffix);
-                        return -1;
-                    }
+                    LPWSTR szSizeSuffix = NULL;
+                    sizBigBufferSize = wcstoul(argv[1] + 2, &szSizeSuffix, 0);
 
-                    if (szSizeSuffix[0] ? szSizeSuffix[1] != 0 : false)
+                    if (szSizeSuffix == argv[1] + 2 ||
+                        (szSizeSuffix[0] != 0 && szSizeSuffix[1] != 0))
                     {
                         fprintf(stderr,
-                            "Invalid buffer size: %s\n", argv[1] + 2);
+                            "Invalid buffer size: %ws\n", szSizeSuffix);
                         return -1;
                     }
 
                     switch (szSizeSuffix[0])
                     {
-                    case 'E':
+                    case L'E':
                         sizBigBufferSize <<= 10;
-                    case 'P':
+                    case L'P':
                         sizBigBufferSize <<= 10;
-                    case 'T':
+                    case L'T':
                         sizBigBufferSize <<= 10;
-                    case 'G':
+                    case L'G':
                         sizBigBufferSize <<= 10;
-                    case 'M':
+                    case L'M':
                         sizBigBufferSize <<= 10;
-                    case 'K':
+                    case L'K':
                         sizBigBufferSize <<= 10;
                         break;
-                    case 'e':
+                    case L'e':
                         sizBigBufferSize *= 1000;
-                    case 'p':
+                    case L'p':
                         sizBigBufferSize *= 1000;
-                    case 't':
+                    case L't':
                         sizBigBufferSize *= 1000;
-                    case 'g':
+                    case L'g':
                         sizBigBufferSize *= 1000;
-                    case 'm':
+                    case L'm':
                         sizBigBufferSize *= 1000;
-                    case 'k':
+                    case L'k':
                         sizBigBufferSize *= 1000;
                     case 0:
                         break;
                     default:
                         fprintf(stderr,
-                            "Invalid size suffix: %c\n", szSizeSuffix[0]);
+                            "Invalid size suffix: %wc\n", szSizeSuffix[0]);
                         return -1;
                     }
 
-                    argv[1] += strlen(argv[1]) - 1;
+                    argv[1] += wcslen(argv[1]) - 1;
                 }
                 break;
-            case 'o':
+            case L'o':
             {
-                if (argv[1][1] != ':')
+                if (argv[1][1] != L':')
                 {
                     bDisplayHelp = true;
                     break;
                 }
 
-                char SizeSuffix = NULL;
-                switch (sscanf(argv[1] + 2, "%I64i%c",
+                WCHAR SizeSuffix = NULL;
+                switch (swscanf(argv[1] + 2, L"%I64i%c",
                     &sizWriteOffset.QuadPart, &SizeSuffix))
                 {
                 case 2:
                     switch (SizeSuffix)
                     {
-                    case 'E':
+                    case L'E':
                         sizWriteOffset.QuadPart <<= 60;
                         break;
-                    case 'P':
+                    case L'P':
                         sizWriteOffset.QuadPart <<= 50;
                         break;
-                    case 'T':
+                    case L'T':
                         sizWriteOffset.QuadPart <<= 40;
                         break;
-                    case 'G':
+                    case L'G':
                         sizWriteOffset.QuadPart <<= 30;
                         break;
-                    case 'M':
+                    case L'M':
                         sizWriteOffset.QuadPart <<= 20;
                         break;
-                    case 'K':
+                    case L'K':
                         sizWriteOffset.QuadPart <<= 10;
                         break;
-                    case 'e':
+                    case L'e':
                         sizWriteOffset.QuadPart *= 1000000000000000000;
                         break;
-                    case 'p':
+                    case L'p':
                         sizWriteOffset.QuadPart *= 1000000000000000;
                         break;
-                    case 't':
+                    case L't':
                         sizWriteOffset.QuadPart *= 1000000000000;
                         break;
-                    case 'g':
+                    case L'g':
                         sizWriteOffset.QuadPart *= 1000000000;
                         break;
-                    case 'm':
+                    case L'm':
                         sizWriteOffset.QuadPart *= 1000000;
                         break;
-                    case 'k':
+                    case L'k':
                         sizWriteOffset.QuadPart *= 1000;
                         break;
-                    case 'B':
+                    case L'B':
                         sizWriteOffset.QuadPart *= 512;
                         break;
                     case 0:
                         break;
                     default:
                         fprintf(stderr,
-                            "Invalid forward skip suffix: %c\n",
+                            "Invalid forward skip suffix: %wc\n",
                             SizeSuffix);
                         return -1;
                     }
@@ -193,7 +191,7 @@ main(int argc, char **argv)
                     break;
 
                 default:
-                    fprintf(stderr, "Invalid skip size: %s\n", argv[1]);
+                    fprintf(stderr, "Invalid skip size: %ws\n", argv[1]);
                     return -1;
                 }
 
@@ -201,63 +199,66 @@ main(int argc, char **argv)
                     printf("Write starts at %I64i bytes.\n", sizWriteOffset.QuadPart);
             }
 
-            argv[1] += strlen(argv[1]) - 1;
+            argv[1] += wcslen(argv[1]) - 1;
 
             break;
-            case 'f':
+            case L'f':
                 if (argv[1][1] != ':')
                 {
                     bDisplayHelp = true;
                     break;
                 }
 
-                retrycount = strtoul(argv[1] + 2, NULL, 0);
+                retrycount = wcstoul(argv[1] + 2, NULL, 0);
                 if (retrycount == 0)
                     retrycount = 10;
 
-                argv[1] += strlen(argv[1]) - 1;
+                argv[1] += wcslen(argv[1]) - 1;
 
                 break;
-            case 'l':
+            case L'l':
                 bDeviceLockRequired = false;
                 break;
-            case 'i':
+            case L'i':
                 bIgnoreErrors = true;
                 break;
-            case 'v':
+            case L'v':
                 bVerboseMode = true;
                 break;
-            case 'a':
+            case L'a':
                 bAdjustSize = true;
                 break;
-            case 's':
+            case L's':
                 bCreateSparse = true;
                 break;
-            case 'D':
+            case L'D':
                 bDifferential = true;
                 break;
-            case 'r':
+            case L'r':
                 bNonBufferedIn = true;
                 break;
-            case 'w':
+            case L'w':
                 bNonBufferedOut = true;
                 break;
-            case 'x':
+            case L'x':
                 bWriteThrough = true;
                 break;
-            case 'd':
+            case L'd':
                 bExtendedDASDIO = true;
                 break;
             default:
                 bDisplayHelp = true;
             }
+        }
 
         --argc;
         ++argv;
     }
 
     if (bIgnoreErrors)
+    {
         SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
+    }
 
     if (bDisplayHelp)
     {
@@ -330,57 +331,57 @@ main(int argc, char **argv)
     LARGE_INTEGER skipforward = { 0 };
     if (argc > 4)
     {
-        char SizeSuffix;
-        switch (sscanf(argv[1], "%I64i%c",
+        WCHAR SizeSuffix = 0;
+        switch (swscanf(argv[1], L"%I64i%c",
             &skipforward.QuadPart, &SizeSuffix))
         {
         case 2:
             switch (SizeSuffix)
             {
-            case 'E':
+            case L'E':
                 skipforward.QuadPart <<= 60;
                 break;
-            case 'P':
+            case L'P':
                 skipforward.QuadPart <<= 50;
                 break;
-            case 'T':
+            case L'T':
                 skipforward.QuadPart <<= 40;
                 break;
-            case 'G':
+            case L'G':
                 skipforward.QuadPart <<= 30;
                 break;
-            case 'M':
+            case L'M':
                 skipforward.QuadPart <<= 20;
                 break;
-            case 'K':
+            case L'K':
                 skipforward.QuadPart <<= 10;
                 break;
-            case 'e':
+            case L'e':
                 skipforward.QuadPart *= 1000000000000000000;
                 break;
-            case 'p':
+            case L'p':
                 skipforward.QuadPart *= 1000000000000000;
                 break;
-            case 't':
+            case L't':
                 skipforward.QuadPart *= 1000000000000;
                 break;
-            case 'g':
+            case L'g':
                 skipforward.QuadPart *= 1000000000;
                 break;
-            case 'm':
+            case L'm':
                 skipforward.QuadPart *= 1000000;
                 break;
-            case 'k':
+            case L'k':
                 skipforward.QuadPart *= 1000;
                 break;
-            case 'B':
+            case L'B':
                 skipforward.QuadPart *= 512;
                 break;
             case 0:
                 break;
             default:
                 fprintf(stderr,
-                    "Invalid forward skip suffix: %c\n", SizeSuffix);
+                    "Invalid forward skip suffix: %wc\n", SizeSuffix);
                 return -1;
             }
 
@@ -388,7 +389,7 @@ main(int argc, char **argv)
             break;
 
         default:
-            fprintf(stderr, "Invalid skip size: %s\n", argv[1]);
+            fprintf(stderr, "Invalid skip size: %ws\n", argv[1]);
             return -1;
         }
 
@@ -401,8 +402,8 @@ main(int argc, char **argv)
 
     if (argc > 3)
     {
-        char SizeSuffix;
-        switch (sscanf(argv[1], "%I64i%c",
+        WCHAR SizeSuffix = 0;
+        switch (swscanf(argv[1], L"%I64i%c",
             &copylength, &SizeSuffix))
         {
         case 2:
@@ -460,7 +461,7 @@ main(int argc, char **argv)
             break;
 
         default:
-            fprintf(stderr, "Invalid copylength: %s\n", argv[1]);
+            fprintf(stderr, "Invalid copylength: %ws\n", argv[1]);
             return 1;
         }
 
@@ -489,7 +490,7 @@ main(int argc, char **argv)
 
     if (hIn == INVALID_HANDLE_VALUE)
     {
-        win_perror(argc > 1 ? argv[1] : "stdin");
+        win_perror(argc > 1 ? argv[1] : L"stdin");
         if (bVerboseMode)
             fputs("Error opening input file.\n", stderr);
         return -1;
@@ -500,7 +501,7 @@ main(int argc, char **argv)
             FILE_CURRENT) == INVALID_SET_FILE_POINTER) &&
             (GetLastError() != NO_ERROR))
     {
-        win_perror("Fatal, cannot set input file pointer");
+        win_perror(L"Fatal, cannot set input file pointer");
         return -1;
     }
 
@@ -563,7 +564,7 @@ main(int argc, char **argv)
         }
         else
         {
-            win_perror("Cannot get input disk volume size");
+            win_perror(L"Cannot get input disk volume size");
             return 1;
         }
     }
@@ -581,8 +582,8 @@ main(int argc, char **argv)
         else
         {
             bufptr = buffer;
-            win_perror("Memory allocation error, "
-                "using 512 bytes buffer instead%%nError message");
+            win_perror(L"Memory allocation error, "
+                L"using 512 bytes buffer instead%%nError message");
         }
 
         if (bVerboseMode)
@@ -607,7 +608,7 @@ main(int argc, char **argv)
         diffbufptr = (char*)LocalAlloc(LPTR, bufsiz);
         if (diffbufptr == NULL)
         {
-            win_perror("Memory allocation error");
+            win_perror(L"Memory allocation error");
             return -1;
         }
     }
@@ -651,7 +652,7 @@ main(int argc, char **argv)
 
     if (hOut == INVALID_HANDLE_VALUE)
     {
-        win_perror(argc > 1 ? argv[1] : "stdout");
+        win_perror(argc > 1 ? argv[1] : L"stdout");
 
         if (bVerboseMode)
             fputs("Error opening output file.\n", stderr);
@@ -714,11 +715,11 @@ main(int argc, char **argv)
                         SetLastError(dwSavedErrno);
                     }
 
-                    win_perror("Cannot lock source device (use -l to ignore)");
+                    win_perror(L"Cannot lock source device (use -l to ignore)");
                     return -1;
                 }
                 else
-                    win_perror("Warning! Source device not locked");
+                    win_perror(L"Warning! Source device not locked");
             }
         }
     }
@@ -735,7 +736,7 @@ main(int argc, char **argv)
         if (current_out_pointer.LowPart == INVALID_SET_FILE_POINTER &&
             GetLastError() != NO_ERROR)
         {
-            win_perror("Fatal, cannot get output file pointer");
+            win_perror(L"Fatal, cannot get output file pointer");
             return -1;
         }
 
@@ -780,11 +781,11 @@ main(int argc, char **argv)
                         SetLastError(dwSavedErrno);
                     }
 
-                    win_perror("Cannot lock target device (use -l to ignore)");
+                    win_perror(L"Cannot lock target device (use -l to ignore)");
                     return -1;
                 }
                 else
-                    win_perror("Warning! Target device not locked");
+                    win_perror(L"Warning! Target device not locked");
             }
         }
     }
@@ -796,8 +797,7 @@ main(int argc, char **argv)
         if (!DeviceIoControl(hOut, FSCTL_SET_SPARSE, NULL, 0, NULL, 0, &dw,
             NULL))
         {
-            win_perror("Warning! Failed to set sparse flag for file");
-            bCreateSparse = false;
+            win_perror(L"Warning! Failed to set sparse flag for file");
         }
     }
 
@@ -812,7 +812,7 @@ main(int argc, char **argv)
         if (sizWriteOffset.LowPart == INVALID_SET_FILE_POINTER &&
             GetLastError() != NO_ERROR)
         {
-            win_perror("Error seeking on output device");
+            win_perror(L"Error seeking on output device");
             return 2;
         }
     }
@@ -872,8 +872,8 @@ main(int argc, char **argv)
 
             if (retries < retrycount)
             {
-                fprintf(stderr, "Rawcopy read failure: %s\nRetrying...\n",
-                    (char*)errmsg);
+                fprintf(stderr, "Rawcopy read failure: %ws\nRetrying...\n",
+                    (LPCWSTR)errmsg);
 
                 retries++;
 
@@ -885,7 +885,7 @@ main(int argc, char **argv)
             retries = 0;
 
             switch (bIgnoreErrors ? IDIGNORE :
-                MessageBox(NULL, errmsg, "Rawcopy read failure",
+                MessageBox(NULL, errmsg, L"Rawcopy read failure",
                     MB_ABORTRETRYIGNORE | MB_ICONEXCLAMATION |
                     MB_DEFBUTTON2 | MB_TASKMODAL))
             {
@@ -896,9 +896,8 @@ main(int argc, char **argv)
             case IDIGNORE:
                 if (bVerboseMode)
                 {
-                    CharToOem(errmsg, errmsg);
-                    fprintf(stderr, "Ignoring read error at block %I64u: %s\n",
-                        writtenblocks, (LPCSTR)errmsg);
+                    fprintf(stderr, "Ignoring read error at block %I64u: %ws\n",
+                        writtenblocks, (LPCWSTR)errmsg);
                 }
 
                 dwReadSize = dwBlockSize;
@@ -909,7 +908,7 @@ main(int argc, char **argv)
                     FILE_CURRENT) == INVALID_SET_FILE_POINTER &&
                     GetLastError() != NO_ERROR)
                 {
-                    win_perror("Fatal, cannot set input file pointer");
+                    win_perror(L"Fatal, cannot set input file pointer");
                     return -1;
                 }
             }
@@ -925,25 +924,15 @@ main(int argc, char **argv)
             break;
         }
 
-        // Check for all-zeroes block and skip explicitly writing it to output
+        // Check for all-zeros block and skip explicitly writing it to output
         // file if "create sparse" flag is set and we are writing outside
-        // output file data
+        // output file current length
         bool bSkipWriteBlock = false;
 
-        if (bCreateSparse && readbytes >= existing_out_file_size.QuadPart)
+        if (bCreateSparse && readbytes >= existing_out_file_size.QuadPart &&
+            RtlCompareMemoryUlong(bufptr, dwReadSize, 0) == dwReadSize)
         {
             bSkipWriteBlock = true;
-
-            for (PULONGLONG bufptr2 = (PULONGLONG)bufptr;
-                bufptr2 < (PULONGLONG)(bufptr + dwReadSize);
-                bufptr2++)
-            {
-                if (*bufptr2 != 0)
-                {
-                    bSkipWriteBlock = false;
-                    break;
-                }
-            }
         }
 
         readbytes += dwReadSize;
@@ -951,19 +940,19 @@ main(int argc, char **argv)
         // Check existing block in output file and skip explicitly writing it
         // again if "differential" flag is set and output block is already equal
         // to corresponding block in input file.
-        if (bDifferential)
+        if (bDifferential && !bSkipWriteBlock)
         {
             DWORD dwDiffReadSize;
 
             if (!ReadFile(hOut, diffbufptr, dwReadSize, &dwDiffReadSize, NULL))
             {
-                win_perror("Error reading output file");
+                win_perror(L"Error reading output file");
                 return -1;
             }
 
             if (dwDiffReadSize == dwReadSize)
             {
-                LARGE_INTEGER rewind_pos;
+                LARGE_INTEGER rewind_pos = { 0 };
                 rewind_pos.QuadPart = -(LONGLONG)dwDiffReadSize;
                 if (SetFilePointer(hOut,
                     rewind_pos.LowPart,
@@ -971,7 +960,7 @@ main(int argc, char **argv)
                     FILE_CURRENT) == INVALID_SET_FILE_POINTER &&
                     GetLastError() != NO_ERROR)
                 {
-                    win_perror("Fatal, cannot set output file pointer");
+                    win_perror(L"Fatal, cannot set output file pointer");
                     return -1;
                 }
 
@@ -993,7 +982,7 @@ main(int argc, char **argv)
                 INVALID_SET_FILE_POINTER &&
                 GetLastError() != NO_ERROR)
             {
-                win_perror("Fatal, cannot set output file pointer");
+                win_perror(L"Fatal, cannot set output file pointer");
                 return -1;
             }
 
@@ -1017,7 +1006,7 @@ main(int argc, char **argv)
             while (!WriteFile(hOut, bufptr, dwReadSize, &dwWriteSize, NULL))
             {
                 DWORD dwErrNo = GetLastError();
-                if ((dwErrNo == ERROR_BROKEN_PIPE) |
+                if ((dwErrNo == ERROR_BROKEN_PIPE) ||
                     (dwErrNo == ERROR_INVALID_PARAMETER))
                     break;
 
@@ -1025,8 +1014,8 @@ main(int argc, char **argv)
 
                 if (write_retries < retrycount)
                 {
-                    fprintf(stderr, "Rawcopy write failure: %s\nRetrying...\n",
-                        (char*)errmsg);
+                    fprintf(stderr, "Rawcopy write failure: %ws\nRetrying...\n",
+                        (LPCWSTR)errmsg);
 
                     write_retries++;
                     Sleep(500);
@@ -1036,7 +1025,7 @@ main(int argc, char **argv)
                 write_retries = 0;
 
                 switch (bIgnoreErrors ? IDIGNORE :
-                    MessageBox(NULL, errmsg, "Rawcopy write failure",
+                    MessageBox(NULL, errmsg, L"Rawcopy write failure",
                         MB_ABORTRETRYIGNORE | MB_ICONEXCLAMATION |
                         MB_DEFBUTTON2 | MB_TASKMODAL))
                 {
@@ -1047,10 +1036,9 @@ main(int argc, char **argv)
                 case IDIGNORE:
                     if (bVerboseMode)
                     {
-                        CharToOem(errmsg, errmsg);
                         fprintf(stderr,
-                            "Ignoring write error at block %I64u: %s\n",
-                            writtenblocks, (LPCSTR)errmsg);
+                            "Ignoring write error at block %I64u: %ws\n",
+                            writtenblocks, (LPCWSTR)errmsg);
                     }
 
                     LONG lZero = 0;
@@ -1058,7 +1046,7 @@ main(int argc, char **argv)
                         FILE_CURRENT) == INVALID_SET_FILE_POINTER &&
                         GetLastError() != NO_ERROR)
                     {
-                        win_perror("Fatal, cannot set output file pointer");
+                        win_perror(L"Fatal, cannot set output file pointer");
                         return -1;
                     }
                 }
@@ -1110,7 +1098,7 @@ main(int argc, char **argv)
         if (existing_size.LowPart == INVALID_FILE_SIZE &&
             GetLastError() != NO_ERROR)
         {
-            win_perror("Error getting output file size");
+            win_perror(L"Error getting output file size");
             return 1;
         }
 
@@ -1134,18 +1122,18 @@ main(int argc, char **argv)
         if (ptr == INVALID_SET_FILE_POINTER &&
             GetLastError() != NO_ERROR)
         {
-            win_perror("Error setting output file size");
+            win_perror(L"Error setting output file size");
             return 1;
         }
 
         if (!SetEndOfFile(hOut))
         {
-            win_perror("Error setting output file size");
+            win_perror(L"Error setting output file size");
             return 1;
         }
     }
 
-    if (bDifferential)
+    if (bDifferential || bCreateSparse)
     {
         LONGLONG updated_bytes;
         updated_bytes = readbytes - skippedwritebytes;
@@ -1161,3 +1149,17 @@ main(int argc, char **argv)
             TO_h(readbytes), TO_p(readbytes));
     }
 }
+
+#if _MSC_VER < 1900
+
+// This is enough startup code for this program if compiled to use the DLL CRT.
+extern "C"
+int
+wmainCRTStartup()
+{
+    int argc = 0;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLine(), &argc);
+    exit(wmain(argc, argv));
+}
+
+#endif
