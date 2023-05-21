@@ -54,23 +54,23 @@
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <Import Project="..\winstrct.props" />
-    <Import Project="C:\Users\olof.OLOFDOM\Source\dbglibs.props" />
+    <Import Project="..\props\winstrct.props" />
+    <Import Project="..\props\dbglibs.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
-    <Import Project="..\winstrct.props" />
-    <Import Project="C:\Users\olof.OLOFDOM\Source\dbglibs.props" />
+    <Import Project="..\props\winstrct.props" />
+    <Import Project="..\props\dbglibs.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <Import Project="C:\Users\olof.OLOFDOM\Source\wdk7.props" />
-    <Import Project="C:\Users\olof.OLOFDOM\Source\wdk7_w2k_x86.props" />
-    <Import Project="..\winstrct.props" />
+    <Import Project="..\props\wdk7.props" />
+    <Import Project="..\props\wdk7_w2k_x86.props" />
+    <Import Project="..\props\winstrct.props" />
     <Import Project="C:\Users\olof.OLOFDOM\Source\signltr.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
-    <Import Project="C:\Users\olof.OLOFDOM\Source\wdk7.props" />
-    <Import Project="C:\Users\olof.OLOFDOM\Source\wdk7_wnet_x64.props" />
-    <Import Project="..\winstrct.props" />
+    <Import Project="..\props\wdk7.props" />
+    <Import Project="..\props\wdk7_wnet_x64.props" />
+    <Import Project="..\props\winstrct.props" />
     <Import Project="C:\Users\olof.OLOFDOM\Source\signltr.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
