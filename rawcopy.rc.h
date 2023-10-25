@@ -1,2 +1,2 @@
-#define RAWCOPY_VERSION "1.3.8.15"
+#define RAWCOPY_VERSION "1.3.9.16"
 

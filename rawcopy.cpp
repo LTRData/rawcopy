@@ -24,6 +24,7 @@
 
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "ntdll.lib")
+#pragma comment(lib, "advapi32.lib")
 
 #define STDBUFSIZ	512
 #define BIGBUFSIZ	(512 << 10)
@@ -59,6 +60,7 @@ wmain(int argc, WCHAR *argv[])
     bool bNonBufferedOut = false; // -w switch
     bool bWriteThrough = false;   // -x switch
     bool bExtendedDASDIO = false; // -d switch
+    bool bBackupPriv = false;     // -b switch
     bool bDisplayHelp = false;
     DWORD retrycount = 0;         // -f switch
     SIZE_T sizBigBufferSize = BIGBUFSIZ;	// -m:nnn parameter
@@ -196,7 +198,7 @@ wmain(int argc, WCHAR *argv[])
                 }
 
                 if (bVerboseMode)
-                    printf("Write starts at %I64i bytes.\n", sizWriteOffset.QuadPart);
+                    fprintf(stderr, "Write starts at %I64i bytes.\n", sizWriteOffset.QuadPart);
             }
 
             argv[1] += wcslen(argv[1]) - 1;
@@ -246,6 +248,9 @@ wmain(int argc, WCHAR *argv[])
             case L'd':
                 bExtendedDASDIO = true;
                 break;
+            case L'b':
+                bBackupPriv = true;
+                break;
             default:
                 bDisplayHelp = true;
             }
@@ -260,12 +265,21 @@ wmain(int argc, WCHAR *argv[])
         SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
     }
 
+    if (bBackupPriv)
+    {
+        if (!EnableBackupPrivileges())
+        {
+            WErrMsg errmsg;
+            fprintf(stderr, "Warning: Backup privileges not enabled: %ws\n", errmsg.GetPtr());
+        }
+    }
+
     if (bDisplayHelp)
     {
         fputs("File and device read/write utility.\n"
             "\n"
             "Version " RAWCOPY_VERSION ". "
-            "Copyright (C) Olof Lagerkvist 1997-2018.\n"
+            "Copyright (C) Olof Lagerkvist 1997-2023.\n"
             "Differential operation based on modification by LZ.\n"
             "This program is open source freeware.\n"
             "http://www.ltr-data.se      olof@ltr-data.se\n"
@@ -275,33 +289,12 @@ wmain(int argc, WCHAR *argv[])
             "       [[[[[skipforward] copylength] infile] outfile]\n"
             "\n"
             "Default infile/outfile if none or blank given is standard input/output device.\n"
-            "-l     Access devices without locking access to them. Use this switch when you\n"
-            "       are reading/writing physical drives and other processes are using the\n"
-            "       drives.\n"
-            "       Note! This may destroy your data!\n"
             "\n"
-            "-v     Verbose mode. Writes to stderr what is being done.\n"
+            "-a     Adjusts size out output file to disk volume size of input. This switch\n"
+            "       is only valid if input is a disk volume.\n"
             "\n"
-            "-f     Number of retries on failed I/O operations.\n"
-            "\n"
-            "-m     Try to buffer more of input file into memory before writing to output\n"
-            "       file.\n"
-            "\n"
-            "       Buffer size may be suffixed with K,M or G. If -m is given without a\n"
-            "       buffer size, 512 KB is assumed. If -m is not given a buffer size of 512\n"
-            "       bytes is used and read/write failures can be ignored.\n"
-            "\n"
-            "-i     Ignores and skip over read/write failures without displaying any dialog\n"
-            "       boxes.\n"
-            "\n"
-            "-r     Read input without intermediate buffering.\n"
-            "\n"
-            "-w     Write output without intermediate buffering.\n"
-            "\n"
-            "-x     Write through to output without going via system cache.\n"
-            "\n"
-            "-s     Creates output file as sparse file on NTFS volumes and skips explicitly\n"
-            "       writing all-zero blocks.\n"
+            "-b     Enable and use backup privileges to bypass file security, if allowed for\n"
+            "       current user account.\n"
             "\n"
             "-D     Differential operation. Skips rewriting blocks in output file that are\n"
             "       already equal to corresponding blocks in input file.\n"
@@ -310,8 +303,32 @@ wmain(int argc, WCHAR *argv[])
             "       select a compatible buffer size with the -m switch for successful\n"
             "       operation.\n"
             "\n"
-            "-a     Adjusts size out output file to disk volume size of input. This switch\n"
-            "       is only valid if input is a disk volume.\n"
+            "-f     Number of retries on failed I/O operations.\n"
+            "\n"
+            "-i     Ignores and skip over read/write failures without displaying any dialog\n"
+            "       boxes.\n"
+            "\n"
+            "-l     Access devices without locking access to them. Use this switch when you\n"
+            "       are reading/writing physical drives and other processes are using the\n"
+            "       drives.\n"
+            "       Note! This may destroy your data!\n"
+            "-m     Try to buffer more of input file into memory before writing to output\n"
+            "       file.\n"
+            "\n"
+            "-r     Read input without intermediate buffering.\n"
+            "\n"
+            "-s     Creates output file as sparse file on NTFS volumes and skips explicitly\n"
+            "       writing all-zero blocks.\n"
+            "\n"
+            "-v     Verbose mode. Writes to stderr what is being done.\n"
+            "\n"
+            "       Buffer size may be suffixed with K,M or G. If -m is given without a\n"
+            "       buffer size, 512 KB is assumed. If -m is not given a buffer size of 512\n"
+            "       bytes is used and read/write failures can be ignored.\n"
+            "\n"
+            "-w     Write output without intermediate buffering.\n"
+            "\n"
+            "-x     Write through to output without going via system cache.\n"
             "\n"
             "Examples for Windows NT:\n"
             "rawcopy -m diskimage.img \\\\.\\A:\n"
@@ -394,7 +411,7 @@ wmain(int argc, WCHAR *argv[])
         }
 
         if (bVerboseMode)
-            printf("Skipping %I64i bytes.\n", skipforward.QuadPart);
+            fprintf(stderr, "Skipping %I64i bytes.\n", skipforward.QuadPart);
 
         argv++;
         argc--;
@@ -466,7 +483,7 @@ wmain(int argc, WCHAR *argv[])
         }
 
         if (bVerboseMode)
-            printf("Copying %I64i bytes.\n", copylength);
+            fprintf(stderr, "Copying %I64i bytes.\n", copylength);
 
         argv++;
         argc--;
@@ -480,7 +497,8 @@ wmain(int argc, WCHAR *argv[])
             NULL,
             OPEN_EXISTING,
             FILE_FLAG_SEQUENTIAL_SCAN |
-            (bNonBufferedIn ? FILE_FLAG_NO_BUFFERING : 0),
+            (bNonBufferedIn ? FILE_FLAG_NO_BUFFERING : 0) |
+            (bBackupPriv ? FILE_FLAG_BACKUP_SEMANTICS : 0),
             NULL);
     }
     else
@@ -491,8 +509,10 @@ wmain(int argc, WCHAR *argv[])
     if (hIn == INVALID_HANDLE_VALUE)
     {
         win_perror(argc > 1 ? argv[1] : L"stdin");
+        
         if (bVerboseMode)
             fputs("Error opening input file.\n", stderr);
+        
         return -1;
     }
 
@@ -629,7 +649,8 @@ wmain(int argc, WCHAR *argv[])
             OPEN_ALWAYS,
             FILE_ATTRIBUTE_NORMAL |
             (bNonBufferedOut ? FILE_FLAG_NO_BUFFERING : 0) |
-            (bWriteThrough ? FILE_FLAG_WRITE_THROUGH : 0),
+            (bWriteThrough ? FILE_FLAG_WRITE_THROUGH : 0) |
+            (bBackupPriv ? FILE_FLAG_BACKUP_SEMANTICS : 0),
             hIn);
 
         if (hOut == INVALID_HANDLE_VALUE &&
@@ -641,7 +662,8 @@ wmain(int argc, WCHAR *argv[])
                 NULL,
                 OPEN_EXISTING,
                 (bNonBufferedOut ? FILE_FLAG_NO_BUFFERING : 0) |
-                (bWriteThrough ? FILE_FLAG_WRITE_THROUGH : 0),
+                (bWriteThrough ? FILE_FLAG_WRITE_THROUGH : 0) |
+                (bBackupPriv ? FILE_FLAG_BACKUP_SEMANTICS : 0),
                 NULL);
         }
     }
