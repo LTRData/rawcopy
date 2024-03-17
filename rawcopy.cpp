@@ -1160,15 +1160,15 @@ wmain(int argc, WCHAR *argv[])
         LONGLONG updated_bytes;
         updated_bytes = readbytes - skippedwritebytes;
         fprintf(stderr, "\n%.4g %s of %.4g %s updated (%.3g %%).\n",
-            TO_h(updated_bytes), TO_p(updated_bytes),
-            TO_h(readbytes), TO_p(readbytes),
+            TO_h(updated_bytes), TO_pA(updated_bytes),
+            TO_h(readbytes), TO_pA(readbytes),
             (double)(100 * (double)updated_bytes /
                 readbytes));
     }
     else if (bVerboseMode)
     {
         fprintf(stderr, "\n%.4g %s copied.\n",
-            TO_h(readbytes), TO_p(readbytes));
+            TO_h(readbytes), TO_pA(readbytes));
     }
 }
 
