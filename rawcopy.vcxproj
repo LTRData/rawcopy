@@ -302,6 +302,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\libsrc\wconmsgw.cpp" />
     <ClCompile Include="..\libsrc\woemprnf.c" />
     <ClCompile Include="..\libsrc\wwperror.c" />
     <ClCompile Include="rawcopy.cpp" />

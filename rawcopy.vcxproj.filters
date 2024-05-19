@@ -24,6 +24,9 @@
     <ClCompile Include="..\libsrc\woemprnf.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\libsrc\wconmsgw.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="rawcopy.rc">
