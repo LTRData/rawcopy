@@ -89,3 +89,7 @@ Release configurations also import `signltr.props` from an absolute path in the 
 ## Credits
 
 By Olof Lagerkvist, LTR Data. The command-line help carries a 1997–2023 copyright notice and credits LZ for the modification on which differential operation is based.
+
+## License
+
+Licensed under the [MIT License](LICENSE).
